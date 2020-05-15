@@ -1,139 +1,90 @@
 import 'package:flutter/material.dart';
-import 'package:link_vault/editForm.dart';
-import 'package:flutter/services.dart';
+import 'package:hive/hive.dart';
+import 'package:link_vault/LinkPage.dart';
+import 'package:link_vault/models/Item.dart';
+import 'package:path_provider/path_provider.dart' as path_provider;
 
-class Link {
-  String title;
-  String url;
+const rootFolderName = 'LinkVault';
 
-  Link(this.title, this.url);
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  final appDocumentDirectory =
+      await path_provider.getApplicationDocumentsDirectory();
+  Hive.init(appDocumentDirectory.path);
+  Hive.registerAdapter(ItemAdapter());
+  Hive.registerAdapter(ItemTypeAdapter());
+  runApp(MyApp());
 }
 
-void main() => runApp(MyApp());
-
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   // This widget is the root of your application.
+  @override
+  _MyAppState createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Link Vault',
-      theme: ThemeData(
-        primarySwatch: Colors.teal,
-      ),
-      home: MyHomePage(title: 'Link Vault'),
-    );
-  }
-}
-
-class MyHomePage extends StatefulWidget {
-  MyHomePage({Key key, this.title}) : super(key: key);
-
-  final String title;
-
-  @override
-  _MyHomePageState createState() => _MyHomePageState();
-}
-
-class _MyHomePageState extends State<MyHomePage> {
-  var _links = List<Link>();
-
-  void _addLink(Link link) {
-    setState(() {
-      _links.add(link);
-    });
-  }
-
-  void _updateLink(int index, Link link) {
-    setState(() {
-      _links[index] = link;
-    });
-  }
-
-  void _deleteLink(int index) {
-    setState(() {
-      _links.removeAt(index);
-    });
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    List<Link> dummyElements = [
-      Link('youtube', 'youtube.com'),
-      Link('google', 'google.com'),
-      Link('soundcloud', 'soundcloud.com'),
-    ];
-    _links.addAll(dummyElements);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.title),
-      ),
-      body: Center(
-          child: ListView.builder(
-        padding: const EdgeInsets.all(8),
-        itemCount: _links.length,
-        itemBuilder: (BuildContext context, int index) {
-          return Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: <Widget>[
-                Column(
-                  children: <Widget>[
-                    Text(_links[index].title),
-                  ],
-                ),
-                Column(children: <Widget>[
-                  Row(
-                    children: <Widget>[
-                      IconButton(
-                        icon: Icon(
-                          Icons.content_copy,
-                          color: Colors.green,
-                        ),
-                        onPressed: () => Clipboard.setData(
-                            ClipboardData(text: _links[index].url)),
-                      ),
-                      IconButton(
-                        icon: Icon(
-                          Icons.edit,
-                          color: Colors.blue,
-                        ),
-                        onPressed: () => _pushEditLinkScreen(index),
-                      ),
-                      IconButton(
-                        icon: Icon(Icons.delete, color: Colors.red),
-                        onPressed: () => _deleteLink(index),
-                      ),
-                    ],
-                  )
-                ]),
-              ]);
+      theme: _theme(),
+      home: FutureBuilder(
+        future: Hive.openBox<Item>('links'),
+        builder: (BuildContext context, AsyncSnapshot snapshot) {
+          if (snapshot.connectionState == ConnectionState.done) {
+            if (snapshot.hasError) {
+              return Text(snapshot.error.toString());
+            }
+            var linkBox = Hive.box<Item>('links');
+            print(linkBox.length);
+            if (linkBox.get(rootFolderName) == null) {
+              linkBox.put(rootFolderName,
+                  Item.folder(rootFolderName, HiveList<Item>(linkBox)));
+            }
+            return LinkPage(box: linkBox, folder: linkBox.get(rootFolderName));
+          }
+          return Scaffold();
         },
-      )),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _pushEditLinkScreen,
-        tooltip: 'Add link',
-        child: Icon(Icons.add),
       ),
     );
   }
 
-  void _pushEditLinkScreen([int index]) {
-    Navigator.of(context).push(MaterialPageRoute(builder: (context) {
-      if (index != null) {
-        return LinkEditForm.withInitial(_links[index], (Link link) {
-          _updateLink(index, link);
-          Navigator.pop(context);
-        });
-      } else {
-        return LinkEditForm((Link link) {
-          _addLink(link);
-          Navigator.pop(context);
-        });
-      }
-    }));
+  @override
+  void dispose() {
+    Hive.box<Item>('links').compact();
+    Hive.close();
+    super.dispose();
   }
 }
+
+ThemeData _theme() {
+  return ThemeData(
+    // Define the default brightness and colors.
+    brightness: Brightness.dark,
+    primaryColor: Colors.teal,
+    accentColor: Colors.teal[300],
+    buttonColor: Colors.teal[300],
+    cursorColor: Colors.teal[300],
+    iconTheme: IconThemeData(color: Colors.teal[300]),
+    errorColor: Colors.orange[500],
+    snackBarTheme: SnackBarThemeData(
+        backgroundColor: Colors.teal[300],
+        contentTextStyle: TextStyle(color: Colors.black)),
+    appBarTheme: AppBarTheme(
+      textTheme: TextTheme(
+          headline6: TextStyle(
+        color: Colors.white,
+        fontSize: 22,
+      )),
+    ),
+  );
+}
+
+// int nameComparator(dynamic k1, dynamic k2) {
+//   var linkBox = Hive.box<Item>('links');
+//   var k1Name = linkBox.get(k1).name;
+//   var k2Name = linkBox.get(k2).name;
+
+//   return (k1Name).compareTo(k2Name);
+// }
