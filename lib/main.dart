@@ -3,8 +3,30 @@ import 'package:hive/hive.dart';
 import 'package:link_vault/LinkPage.dart';
 import 'package:link_vault/models/Item.dart';
 import 'package:path_provider/path_provider.dart' as path_provider;
+import 'package:provider/provider.dart';
 
-const rootFolderName = 'LinkVault';
+const rootFolderName = 'Link Vault';
+
+class ItemToMove {
+  Item item;
+  Item parentFolder;
+
+  ItemToMove(this.item, this.parentFolder);
+}
+
+class ItemMoveData {
+  Map<String, ItemToMove> itemsToMove;
+
+  ItemMoveData() : itemsToMove = Map<String, ItemToMove>();
+
+  void clear() {
+    this.itemsToMove = Map();
+  }
+
+  void add(Item item, Item parentFolder) {
+    this.itemsToMove[item.key] = ItemToMove(item, parentFolder);
+  }
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,26 +48,30 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Link Vault',
-      theme: _theme(),
-      home: FutureBuilder(
-        future: Hive.openBox<Item>('links'),
-        builder: (BuildContext context, AsyncSnapshot snapshot) {
-          if (snapshot.connectionState == ConnectionState.done) {
-            if (snapshot.hasError) {
-              return Text(snapshot.error.toString());
+    return Provider<ItemMoveData>(
+      create: (BuildContext context) => ItemMoveData(),
+      child: MaterialApp(
+        title: 'Link Vault',
+        theme: _theme(),
+        home: FutureBuilder(
+          future: Hive.openBox<Item>('links'),
+          builder: (BuildContext context, AsyncSnapshot snapshot) {
+            if (snapshot.connectionState == ConnectionState.done) {
+              if (snapshot.hasError) {
+                return Text(snapshot.error.toString());
+              }
+              var linkBox = Hive.box<Item>('links');
+              print(linkBox.length);
+              if (linkBox.get(rootFolderName) == null) {
+                linkBox.put(rootFolderName,
+                    Item.folder(rootFolderName, HiveList<Item>(linkBox)));
+              }
+              return LinkPage(
+                  box: linkBox, folder: linkBox.get(rootFolderName));
             }
-            var linkBox = Hive.box<Item>('links');
-            print(linkBox.length);
-            if (linkBox.get(rootFolderName) == null) {
-              linkBox.put(rootFolderName,
-                  Item.folder(rootFolderName, HiveList<Item>(linkBox)));
-            }
-            return LinkPage(box: linkBox, folder: linkBox.get(rootFolderName));
-          }
-          return Scaffold();
-        },
+            return Scaffold();
+          },
+        ),
       ),
     );
   }
@@ -75,7 +101,7 @@ ThemeData _theme() {
       textTheme: TextTheme(
           headline6: TextStyle(
         color: Colors.white,
-        fontSize: 22,
+        fontSize: 20,
       )),
     ),
   );

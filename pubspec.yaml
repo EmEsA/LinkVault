@@ -1,5 +1,5 @@
 name: link_vault
-description: A new Flutter project.
+description: A place for all your handy links.
 
 # The following defines the version and build number for your application.
 # A version number is three numbers separated by dots, like 1.2.43
@@ -33,6 +33,7 @@ dependencies:
   permission_handler: ^5.0.0+hotfix.5
   file_picker: ^1.9.0+1
   ext_storage: ^1.0.3
+  provider: ^4.1.2
 
 dev_dependencies:
   # flutter_test:

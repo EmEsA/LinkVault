@@ -35,6 +35,7 @@ class ItemEditFormState extends State<ItemEditForm> {
       formBody = <Widget>[
         Text('Name'),
         TextFormField(
+          autofocus: true,
           initialValue: widget.item != null ? widget.item.name : null,
           validator: nameValidator,
           onSaved: (name) => _item.name = name,
@@ -55,6 +56,7 @@ class ItemEditFormState extends State<ItemEditForm> {
       formBody = <Widget>[
         Text('Name'),
         TextFormField(
+          autofocus: true,
           initialValue: widget.item != null ? widget.item.name : null,
           validator: nameValidator,
           onSaved: (name) => _item.name = name,

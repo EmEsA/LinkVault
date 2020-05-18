@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -9,11 +10,13 @@ import 'package:link_vault/EditForm.dart';
 import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import 'package:link_vault/models/Item.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:share/share.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:ext_storage/ext_storage.dart';
+import 'main.dart';
 
 enum MenuOption { export, import }
 
@@ -21,7 +24,6 @@ class LinkPage extends StatefulWidget {
   LinkPage({Key key, this.box, this.folder}) : super(key: key);
   final Box box;
   final Item folder;
-
   @override
   _LinkPageState createState() => _LinkPageState();
 }
@@ -49,16 +51,19 @@ class _LinkPageState extends State<LinkPage> {
     return _buildPage(context);
   }
 
-  void _pushEditScreen(Item item, void Function(Item item) handleSave) {
+  void _pushEditScreen(
+      BuildContext context, Item item, void Function(Item item) handleSave) {
     Navigator.of(context).push(MaterialPageRoute(builder: (context) {
       return ItemEditForm(item, _getChildrenNames(widget.folder), handleSave);
     }));
   }
 
-  void _pushFolderEnteredScreen(Item folder) {
+  void _pushFolderEnteredScreen(BuildContext context, Item folder) {
     Navigator.of(context).push(MaterialPageRoute(builder: (context) {
       return LinkPage(box: widget.box, folder: folder);
-    }));
+    })).then((_) {
+      setState(() => {});
+    });
   }
 
   Widget _buildPage(BuildContext context) {
@@ -69,43 +74,58 @@ class _LinkPageState extends State<LinkPage> {
       },
     );
 
+    var actions = <Widget>[
+      IconButton(
+        icon: Icon(Icons.home),
+        onPressed: () => Navigator.popUntil(context, (route) => route.isFirst),
+      ),
+      Builder(
+        builder: (context) {
+          return PopupMenuButton(
+            offset: Offset(10, 50),
+            itemBuilder: (BuildContext context) {
+              return <PopupMenuEntry<MenuOption>>[
+                PopupMenuItem(
+                  value: MenuOption.export,
+                  child: ListTile(
+                    leading: Icon(Icons.backup),
+                    title: Text('Export folder'),
+                  ),
+                ),
+                PopupMenuItem(
+                  value: MenuOption.import,
+                  child: ListTile(
+                    leading: Icon(Icons.restore),
+                    title: Text('Import into folder'),
+                  ),
+                ),
+              ];
+            },
+            onSelected: (MenuOption option) => _handleMenu(context, option),
+          );
+        },
+      ),
+    ];
+
+    var itemMoveData = context.watch<ItemMoveData>();
+    if (itemMoveData.itemsToMove.length != 0) {
+      actions.insertAll(0, <Widget>[
+        IconButton(
+          icon: Icon(Icons.content_paste),
+          onPressed: () =>
+              setState(() => _moveItems(context, itemMoveData, widget.folder)),
+        ),
+        IconButton(
+          icon: Icon(Icons.cancel),
+          onPressed: () => setState(() => itemMoveData.clear()),
+        ),
+      ]);
+    }
+
     return Scaffold(
         appBar: AppBar(
           title: Text(widget.folder.name),
-          actions: <Widget>[
-            IconButton(
-              icon: Icon(Icons.home),
-              onPressed: () =>
-                  Navigator.popUntil(context, (route) => route.isFirst),
-            ),
-            Builder(
-              builder: (context) {
-                return PopupMenuButton(
-                  offset: Offset(10, 50),
-                  itemBuilder: (BuildContext context) {
-                    return <PopupMenuEntry<MenuOption>>[
-                      PopupMenuItem(
-                        value: MenuOption.export,
-                        child: ListTile(
-                          leading: Icon(Icons.backup),
-                          title: Text('Export folder'),
-                        ),
-                      ),
-                      PopupMenuItem(
-                        value: MenuOption.import,
-                        child: ListTile(
-                          leading: Icon(Icons.restore),
-                          title: Text('Import into folder'),
-                        ),
-                      ),
-                    ];
-                  },
-                  onSelected: (MenuOption option) =>
-                      _handleMenu(context, option),
-                );
-              },
-            ),
-          ],
+          actions: actions,
         ),
         body: Center(
           child: body,
@@ -127,85 +147,145 @@ class _LinkPageState extends State<LinkPage> {
         return c1.name.compareTo(c2.name);
       });
     }
-    return children != null
-        ? ListView.builder(
-            itemBuilder: (BuildContext context, int index) {
-              return _buildItem(context, children[index]);
-            },
-            itemCount: children.length)
-        : ListView();
+    return children == null || children.length == 0
+        ? ListView()
+        : ListView(children: _buildChildren(context, children));
   }
 
-  Slidable _buildItem(BuildContext context, Item item) {
+  List<Widget> _buildChildren(BuildContext context, HiveList<Item> children) {
+    var l = List<Widget>();
+    children.forEach((item) {
+      l.add(_buildItem(context, item));
+    });
+    return l;
+  }
+
+  Widget _buildItem(BuildContext context, Item item) {
     if (item.type == ItemType.folder) {
-      return Slidable(
-        key: ObjectKey(item),
-        actionPane: SlidableDrawerActionPane(),
-        actionExtentRatio: 0.25,
-        child: Container(
-          height: 80,
-          alignment: Alignment.center,
-          child: ListTile(
-            leading: Icon(Icons.folder),
-            title: Text(item.name),
-            onTap: () => _pushFolderEnteredScreen(item),
-          ),
-        ),
-        secondaryActions: <Widget>[
-          IconSlideAction(
-              caption: 'Delete',
-              color: Colors.red,
-              icon: Icons.delete,
-              onTap: () {
-                _deleteItem(item);
-              }),
-          IconSlideAction(
-            caption: 'Edit',
-            color: Colors.green,
-            icon: Icons.edit,
-            onTap: () => _pushEditScreen(item, _updateItem),
-          )
-        ],
-      );
+      return _buildFolder(context, item);
     } else {
-      return Slidable(
-        actionPane: SlidableDrawerActionPane(),
-        actionExtentRatio: 0.25,
-        child: Container(
-          height: 80,
-          alignment: Alignment.center,
-          child: ListTile(
-            leading: Icon(Icons.link),
-            title: Text(item.name),
-            onTap: () => _launchURL(context, item.url),
+      return _buildLink(context, item);
+    }
+  }
+
+  // void dispose() {
+  //   var itemMoveData = context.watch<ItemMoveData>();
+  //   if (itemMoveData.currentParent == widget.folder.key) {
+  //     itemMoveData.currentParentSetState = null;
+  //   }
+  //   super.dispose();
+  // }
+
+  Slidable _buildFolder(BuildContext context, Item item) {
+    var itemMoveData = Provider.of<ItemMoveData>(context, listen: false);
+    return Slidable(
+      key: ObjectKey(item),
+      actionPane: SlidableDrawerActionPane(),
+      actionExtentRatio: 0.25,
+      child: Container(
+        height: 80,
+        alignment: Alignment.center,
+        child: ListTile(
+          leading: Icon(Icons.folder,
+              color: itemMoveData.itemsToMove.containsKey(item.key)
+                  ? Colors.grey[600]
+                  : Theme.of(context).buttonColor),
+          title: Text(
+            item.name,
+            style: TextStyle(
+                color: itemMoveData.itemsToMove != null &&
+                        itemMoveData.itemsToMove.containsKey(item.key)
+                    ? Colors.grey[600]
+                    : Colors.white),
           ),
+          onTap: () => _pushFolderEnteredScreen(context, item),
+          onLongPress: () => setState(() {
+            if (itemMoveData.itemsToMove.containsKey(item.key)) {
+              // itemMoveData.clear();
+              itemMoveData.itemsToMove.remove(item.key);
+            } else {
+              itemMoveData.add(item, widget.folder);
+            }
+          }),
         ),
-        secondaryActions: <Widget>[
-          IconSlideAction(
+      ),
+      secondaryActions: <Widget>[
+        IconSlideAction(
             caption: 'Delete',
             color: Colors.red,
             icon: Icons.delete,
-            onTap: () => _deleteItem(item),
+            onTap: () {
+              _deleteItem(item);
+            }),
+        IconSlideAction(
+          caption: 'Edit',
+          color: Colors.green,
+          icon: Icons.edit,
+          onTap: () => _pushEditScreen(context, item, _updateItem),
+        )
+      ],
+    );
+  }
+
+  Slidable _buildLink(BuildContext context, Item item) {
+    var itemMoveData = Provider.of<ItemMoveData>(context, listen: false);
+    return Slidable(
+      actionPane: SlidableDrawerActionPane(),
+      actionExtentRatio: 0.25,
+      child: Container(
+        height: 80,
+        alignment: Alignment.center,
+        child: ListTile(
+          leading: Icon(Icons.link,
+              color: itemMoveData.itemsToMove.containsKey(item.key)
+                  ? Colors.grey[600]
+                  : Theme.of(context).buttonColor),
+          title: Text(
+            item.name,
+            style: TextStyle(
+                color: itemMoveData.itemsToMove != null &&
+                        itemMoveData.itemsToMove.containsKey(item.key)
+                    ? Colors.grey[600]
+                    : Colors.white),
           ),
-          IconSlideAction(
-            caption: 'Edit',
-            color: Colors.green,
-            icon: Icons.edit,
-            onTap: () => _pushEditScreen(item, _updateItem),
-          )
-        ],
-        actions: <Widget>[
-          IconSlideAction(
-            caption: 'Share',
-            color: Colors.blue,
-            icon: Icons.share,
-            onTap: () => Share.share(item.url,
-                subject:
-                    'Check out this link'), //_copyToClipboard(context, item.url),
-          )
-        ],
-      );
-    }
+          onTap: () => _launchURL(context, item.url),
+          onLongPress: () {
+            setState(() {
+              if (itemMoveData.itemsToMove.containsKey(item.key)) {
+                // itemMoveData.clear();
+                itemMoveData.itemsToMove.remove(item.key);
+              } else {
+                itemMoveData.add(item, widget.folder);
+              }
+            });
+          },
+        ),
+      ),
+      secondaryActions: <Widget>[
+        IconSlideAction(
+          caption: 'Delete',
+          color: Colors.red,
+          icon: Icons.delete,
+          onTap: () => _deleteItem(item),
+        ),
+        IconSlideAction(
+          caption: 'Edit',
+          color: Colors.green,
+          icon: Icons.edit,
+          onTap: () => _pushEditScreen(context, item, _updateItem),
+        )
+      ],
+      actions: <Widget>[
+        IconSlideAction(
+          caption: 'Share',
+          color: Colors.blue,
+          icon: Icons.share,
+          onTap: () => Share.share(item.url,
+              subject:
+                  'Check out this link'), //_copyToClipboard(context, item.url),
+        )
+      ],
+    );
   }
 
   SpeedDial _buildSpeedDial(BuildContext context) {
@@ -218,9 +298,9 @@ class _LinkPageState extends State<LinkPage> {
       overlayOpacity: 0,
       children: [
         _speedDialChild(Icons.link, 'Add link',
-            () => _pushEditScreen(Item.newLink(), _addItem)),
+            () => _pushEditScreen(context, Item.newLink(), _addItem)),
         _speedDialChild(Icons.folder, 'Add folder',
-            () => _pushEditScreen(Item.newFolder(linkBox), _addItem))
+            () => _pushEditScreen(context, Item.newFolder(linkBox), _addItem))
       ],
     );
   }
@@ -429,4 +509,14 @@ _itemTypefromString(String type) {
     }
   }
   return null;
+}
+
+void _moveItems(BuildContext context, ItemMoveData itemMoveData, Item folder) {
+  itemMoveData.itemsToMove.forEach((_, itemToMove) {
+    folder.children.add(itemToMove.item);
+    itemToMove.parentFolder.children.remove(itemToMove.item);
+    itemToMove.parentFolder.save();
+    folder.save();
+  });
+  itemMoveData.clear();
 }
