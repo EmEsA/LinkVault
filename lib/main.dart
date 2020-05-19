@@ -67,7 +67,10 @@ class _MyAppState extends State<MyApp> {
                     Item.folder(rootFolderName, HiveList<Item>(linkBox)));
               }
               return LinkPage(
-                  box: linkBox, folder: linkBox.get(rootFolderName));
+                box: linkBox,
+                folder: linkBox.get(rootFolderName),
+                path: <String>['Link Vault'],
+              );
             }
             return Scaffold();
           },

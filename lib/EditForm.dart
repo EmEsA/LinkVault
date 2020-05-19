@@ -37,6 +37,7 @@ class ItemEditFormState extends State<ItemEditForm> {
         TextFormField(
           autofocus: true,
           initialValue: widget.item != null ? widget.item.name : null,
+          textCapitalization: TextCapitalization.sentences,
           validator: nameValidator,
           onSaved: (name) => _item.name = name,
         ),
@@ -58,6 +59,7 @@ class ItemEditFormState extends State<ItemEditForm> {
         TextFormField(
           autofocus: true,
           initialValue: widget.item != null ? widget.item.name : null,
+          textCapitalization: TextCapitalization.sentences,
           validator: nameValidator,
           onSaved: (name) => _item.name = name,
         ),

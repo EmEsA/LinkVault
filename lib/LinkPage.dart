@@ -21,9 +21,10 @@ import 'main.dart';
 enum MenuOption { export, import }
 
 class LinkPage extends StatefulWidget {
-  LinkPage({Key key, this.box, this.folder}) : super(key: key);
+  LinkPage({Key key, this.box, this.folder, this.path}) : super(key: key);
   final Box box;
   final Item folder;
+  final List<String> path;
   @override
   _LinkPageState createState() => _LinkPageState();
 }
@@ -46,9 +47,19 @@ class _LinkPageState extends State<LinkPage> {
     widget.folder.save();
   }
 
+  ScrollController _scroll = ScrollController();
+
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scroll.animateTo(_scroll.position.maxScrollExtent,
+          duration: Duration(milliseconds: 1000), curve: Curves.bounceOut);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    return _buildPage(context);
+    return _buildPage(context, _scroll);
   }
 
   void _pushEditScreen(
@@ -60,17 +71,58 @@ class _LinkPageState extends State<LinkPage> {
 
   void _pushFolderEnteredScreen(BuildContext context, Item folder) {
     Navigator.of(context).push(MaterialPageRoute(builder: (context) {
-      return LinkPage(box: widget.box, folder: folder);
+      var path = List<String>.from(widget.path);
+      path.add(folder.name);
+      return LinkPage(
+        box: widget.box,
+        folder: folder,
+        path: path,
+      );
     })).then((_) {
       setState(() => {});
     });
   }
 
-  Widget _buildPage(BuildContext context) {
+  Widget _buildPage(
+      BuildContext context, ScrollController pathScrollControler) {
     var body = ValueListenableBuilder(
       valueListenable: widget.box.listenable(keys: [widget.folder.key]),
       builder: (context, box, wdg) {
-        return _buildList(context, widget.folder);
+        return Column(
+          children: <Widget>[
+            Expanded(
+              child: Container(
+                color: Colors.teal[700],
+                child: ListView.builder(
+                  controller: pathScrollControler,
+                  scrollDirection: Axis.horizontal,
+                  itemCount: widget.path.length,
+                  itemBuilder: (BuildContext context, int index) {
+                    return ButtonTheme(
+                      padding: EdgeInsets.all(5),
+                      child: RaisedButton(
+                        shape: BeveledRectangleBorder(),
+                        elevation: 10,
+                        child: Text(widget.path[index]),
+                        color: Colors.teal,
+                        onPressed: () {
+                          for (var i = 1; i < widget.path.length - index; i++)
+                            Navigator.of(context).pop();
+                        },
+                      ),
+                    );
+                  },
+                ),
+              ),
+              flex: 1,
+            ),
+            Expanded(
+              child: _buildList(context, widget.folder),
+              flex: 20,
+            ),
+          ],
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+        );
       },
     );
 
@@ -113,7 +165,7 @@ class _LinkPageState extends State<LinkPage> {
         IconButton(
           icon: Icon(Icons.content_paste),
           onPressed: () =>
-              setState(() => _moveItems(context, itemMoveData, widget.folder)),
+              setState(() => moveItems(context, itemMoveData, widget.folder)),
         ),
         IconButton(
           icon: Icon(Icons.cancel),
@@ -144,7 +196,7 @@ class _LinkPageState extends State<LinkPage> {
             return 1;
           }
         }
-        return c1.name.compareTo(c2.name);
+        return compareNames(c1.name, c2.name);
       });
     }
     return children == null || children.length == 0
@@ -240,7 +292,7 @@ class _LinkPageState extends State<LinkPage> {
                     ? Colors.grey[600]
                     : Colors.white),
           ),
-          onTap: () => _launchURL(context, item.url),
+          onTap: () => launchURL(context, item.url),
           onLongPress: () {
             setState(() {
               if (itemMoveData.itemsToMove.containsKey(item.key)) {
@@ -334,7 +386,7 @@ class _LinkPageState extends State<LinkPage> {
   void _handleMenu(BuildContext context, MenuOption option) async {
     if (await Permission.storage.request().isGranted) {
       if (option == MenuOption.export) {
-        var filePath = await _exportFolder(context, widget.box, widget.folder);
+        var filePath = await exportFolder(context, widget.box, widget.folder);
         if (filePath != null) {
           Scaffold.of(context).showSnackBar(SnackBar(
             content:
@@ -342,7 +394,7 @@ class _LinkPageState extends State<LinkPage> {
           ));
         }
       } else {
-        var filePath = await _importFolder(context, widget.box, widget.folder);
+        var filePath = await importFolder(context, widget.box, widget.folder);
         if (filePath != null) {
           widget.folder.save();
           Scaffold.of(context).showSnackBar(SnackBar(
@@ -354,7 +406,7 @@ class _LinkPageState extends State<LinkPage> {
   }
 }
 
-_launchURL(BuildContext context, String url) async {
+launchURL(BuildContext context, String url) async {
   if (await canLaunch(url)) {
     await launch(url);
   } else {
@@ -365,7 +417,7 @@ _launchURL(BuildContext context, String url) async {
   }
 }
 
-Future<String> _exportFolder(BuildContext context, Box box, Item folder) async {
+Future<String> exportFolder(BuildContext context, Box box, Item folder) async {
   var _isProcessing = false;
   var storagePath = await ExtStorage.getExternalStorageDirectory();
   var _controller =
@@ -426,7 +478,7 @@ Future<String> _exportFolder(BuildContext context, Box box, Item folder) async {
   );
 }
 
-Future<String> _importFolder(BuildContext context, Box box, Item folder) async {
+Future<String> importFolder(BuildContext context, Box box, Item folder) async {
   File file = await FilePicker.getFile(
       type: FileType.custom, allowedExtensions: ['json']);
   if (file == null) {
@@ -461,7 +513,7 @@ Future<String> _importFolder(BuildContext context, Box box, Item folder) async {
                   setState(() => _isProcessing = true);
                   var jsonString = file.readAsStringSync();
                   (json.decode(jsonString) as List)
-                      .forEach((item) => _importItem(box, item, folder));
+                      .forEach((item) => importItem(box, item, folder));
                   Navigator.of(context).pop(_controller.text);
                 },
               )
@@ -482,19 +534,19 @@ Future<String> _importFolder(BuildContext context, Box box, Item folder) async {
   );
 }
 
-_importItem(Box box, Map<String, dynamic> json, Item folder) {
-  var item = Item(_itemTypefromString(json['type']), json['name'], json['url'],
+importItem(Box box, Map<String, dynamic> json, Item folder) {
+  var item = Item(itemTypefromString(json['type']), json['name'], json['url'],
       HiveList(box));
   box.put(uuid.v4(), item);
   folder.children.add(item);
   var children = json['children'];
   if (children != null)
     (json['children'] as List).forEach((child) {
-      _importItem(box, child, item);
+      importItem(box, child, item);
     });
 }
 
-_itemTypefromString(String type) {
+itemTypefromString(String type) {
   for (ItemType itemType in ItemType.values) {
     if (itemType.toString() == type) {
       return itemType;
@@ -503,7 +555,7 @@ _itemTypefromString(String type) {
   return null;
 }
 
-void _moveItems(BuildContext context, ItemMoveData itemMoveData, Item folder) {
+void moveItems(BuildContext context, ItemMoveData itemMoveData, Item folder) {
   itemMoveData.itemsToMove.forEach((_, itemToMove) {
     folder.children.add(itemToMove.item);
     itemToMove.parentFolder.children.remove(itemToMove.item);
@@ -511,4 +563,19 @@ void _moveItems(BuildContext context, ItemMoveData itemMoveData, Item folder) {
     folder.save();
   });
   itemMoveData.clear();
+}
+
+int compareNames(String name1, String name2) {
+  var numName1 = double.tryParse(name1);
+  var numName2 = double.tryParse(name2);
+  if (numName1 != null) {
+    if (numName2 != null) {
+      return numName1 < numName2 ? -1 : 1;
+    }
+    return -1;
+  }
+  if (numName2 != null) {
+    return 1;
+  }
+  return name1.toLowerCase().compareTo(name2.toLowerCase());
 }
