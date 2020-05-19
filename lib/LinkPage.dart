@@ -168,14 +168,6 @@ class _LinkPageState extends State<LinkPage> {
     }
   }
 
-  // void dispose() {
-  //   var itemMoveData = context.watch<ItemMoveData>();
-  //   if (itemMoveData.currentParent == widget.folder.key) {
-  //     itemMoveData.currentParentSetState = null;
-  //   }
-  //   super.dispose();
-  // }
-
   Slidable _buildFolder(BuildContext context, Item item) {
     var itemMoveData = Provider.of<ItemMoveData>(context, listen: false);
     return Slidable(
