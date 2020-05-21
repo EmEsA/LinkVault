@@ -52,6 +52,7 @@ class _MyAppState extends State<MyApp> {
       create: (BuildContext context) => ItemMoveData(),
       child: MaterialApp(
         title: 'Link Vault',
+        debugShowCheckedModeBanner: false,
         theme: _theme(),
         home: FutureBuilder(
           future: Hive.openBox<Item>('links'),
