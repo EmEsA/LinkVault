@@ -1,4 +1,4 @@
-package com.example.link_vault
+package com.emesa.link_vault
 
 import androidx.annotation.NonNull;
 import io.flutter.embedding.android.FlutterActivity
