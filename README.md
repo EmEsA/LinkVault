@@ -43,10 +43,10 @@ Just copy the LinkVault.apk to your android phone and istall.
 
 # Screenshots
 
-<img src="screenshots/list.png" width=500px/>
-<img src="screenshots/add.png" width=500px>
-<img src="screenshots/share.png" width=500px>
-<img src="screenshots/delete and edit.png" width=500px>
-<img src="screenshots/list.png" width=500px>
-<img src="screenshots/move.png" width=500px>
-<img src="screenshots/export.png" width=500px>
+<img src="screenshots/list.png" width=300px/>
+<img src="screenshots/add.png" width=300px>
+<img src="screenshots/share.png" width=300px>
+<img src="screenshots/delete and edit.png" width=300px>
+<img src="screenshots/list.png" width=300px>
+<img src="screenshots/move.png" width=300px>
+<img src="screenshots/export.png" width=300px>
